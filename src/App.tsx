@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import WelcomeScreen from './components/WelcomeScreen'
 import Sidebar from './components/Sidebar'
 import Header from './components/Header'
@@ -24,11 +24,19 @@ export default function App() {
   const [viewPanel, setViewPanel] = useState<ViewPanel>('none')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const loadIdRef = useRef(0)
 
   const loadRepositoryData = useCallback(async () => {
     if (!repoPath) return
+    const myLoadId = ++loadIdRef.current
     setLoading(true)
     setError(null)
+    setCommits([])
+    setCurrentBranch('')
+    setStatus(null)
+    setBranches([])
+    setStashes([])
+    setConflicts([])
     try {
       const [log, branch, statusResult, branchesResult, stashesResult, conflictsResult] = await Promise.all([
         window.gitApi.getLog(repoPath, { maxCount: 300 }),
@@ -38,6 +46,7 @@ export default function App() {
         window.gitApi.stashList(repoPath),
         window.gitApi.getConflicts(repoPath)
       ])
+      if (loadIdRef.current !== myLoadId) return
       const enrichedCommits = enrichCommitsWithTree(log)
       setCommits(enrichedCommits)
       setCurrentBranch(branch)
@@ -47,9 +56,12 @@ export default function App() {
       setConflicts(conflictsResult)
       setShowConflictResolver(conflictsResult.length > 0)
     } catch (e: any) {
+      if (loadIdRef.current !== myLoadId) return
       setError(e.message || '加载仓库数据失败')
     } finally {
-      setLoading(false)
+      if (loadIdRef.current === myLoadId) {
+        setLoading(false)
+      }
     }
   }, [repoPath])
 
@@ -216,6 +228,7 @@ export default function App() {
         <StashManager
           key={'sm-' + repoPath}
           repoPath={repoPath}
+          stashes={stashes}
           onClose={() => setViewPanel('none')}
           onRefresh={refresh}
         />

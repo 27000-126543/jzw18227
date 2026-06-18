@@ -1,49 +1,35 @@
 import { useState, useEffect } from 'react'
+import { StashItem } from '../types/git'
 
 interface Props {
   repoPath: string
+  stashes: StashItem[]
   onClose: () => void
   onRefresh: () => void
 }
 
-interface Stash {
-  index: number
-  name: string
-  message: string
-  date: string
-  branch: string
-  diff?: string
-}
-
-export default function StashManager({ repoPath, onClose, onRefresh }: Props) {
-  const [stashes, setStashes] = useState<Stash[]>([])
-  const [loading, setLoading] = useState(true)
+export default function StashManager({ repoPath, stashes, onClose, onRefresh }: Props) {
+  const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [includeUntracked, setIncludeUntracked] = useState(true)
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
   const [diff, setDiff] = useState('')
 
-  const load = async () => {
-    try {
-      setLoading(true)
-      const list = await window.gitApi.stashList(repoPath)
-      setStashes(list)
-      setSelectedIdx(null)
-      setDiff('')
-    } catch (e) {
-      console.error(e)
-    } finally { setLoading(false) }
-  }
-
-  useEffect(() => { load() }, [repoPath])
+  useEffect(() => {
+    setSelectedIdx(null)
+    setDiff('')
+    setMessage('')
+    setIncludeUntracked(true)
+  }, [repoPath])
 
   const handleStashPush = async () => {
     try {
       setLoading(true)
       await window.gitApi.stashPush(repoPath, message || undefined, includeUntracked)
       setMessage('')
+      setSelectedIdx(null)
+      setDiff('')
       onRefresh()
-      await load()
     } catch (e: any) {
       alert('Stash 失败: ' + e.message)
     } finally { setLoading(false) }
@@ -69,10 +55,9 @@ export default function StashManager({ repoPath, onClose, onRefresh }: Props) {
     try {
       setLoading(true)
       await window.gitApi.stashApply(repoPath, idx)
-      onRefresh()
-      await load()
       setSelectedIdx(null)
       setDiff('')
+      onRefresh()
       alert('✓ 已应用')
     } catch (e: any) {
       alert('应用失败: ' + e.message)
@@ -84,10 +69,9 @@ export default function StashManager({ repoPath, onClose, onRefresh }: Props) {
     try {
       setLoading(true)
       await window.gitApi.stashPop(repoPath, idx)
-      onRefresh()
-      await load()
       setSelectedIdx(null)
       setDiff('')
+      onRefresh()
       alert('✓ 已弹出并删除')
     } catch (e: any) {
       alert('Pop 失败: ' + e.message)
@@ -99,9 +83,9 @@ export default function StashManager({ repoPath, onClose, onRefresh }: Props) {
     try {
       setLoading(true)
       await window.gitApi.stashDrop(repoPath, idx)
-      await load()
       setSelectedIdx(null)
       setDiff('')
+      onRefresh()
     } catch (e: any) {
       alert('删除失败: ' + e.message)
     } finally { setLoading(false) }

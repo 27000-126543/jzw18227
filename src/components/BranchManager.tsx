@@ -22,19 +22,28 @@ export default function BranchManager({ repoPath, branches, currentBranch, onRef
   const [log, setLog] = useState<string[]>([])
   const [search, setSearch] = useState('')
   const [showFavOnly, setShowFavOnly] = useState(false)
-  const [favorites, setFavorites] = useState<string[]>(() => {
+  const [favorites, setFavorites] = useState<string[]>([])
+
+  const favKey = `gitui.favBranches:${repoPath}`
+
+  const loadFavorites = () => {
     try {
-      return JSON.parse(localStorage.getItem('gitui.favBranches') || '[]')
+      const raw = localStorage.getItem(favKey)
+      setFavorites(raw ? JSON.parse(raw) : [])
     } catch {
-      return []
+      setFavorites([])
     }
-  })
+  }
+
+  useEffect(() => {
+    loadFavorites()
+  }, [repoPath])
 
   const toggleFav = (name: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
     setFavorites(prev => {
       const next = prev.includes(name) ? prev.filter(x => x !== name) : [...prev, name]
-      localStorage.setItem('gitui.favBranches', JSON.stringify(next))
+      localStorage.setItem(favKey, JSON.stringify(next))
       return next
     })
   }

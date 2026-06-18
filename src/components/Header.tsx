@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { GitStatus } from '../types/git'
 
 interface Props {
@@ -7,23 +6,20 @@ interface Props {
   status: GitStatus | null
   onRefresh: () => void
   loading: boolean
+  onSwitchRepo: (path: string) => void
 }
 
-export default function Header({ repoPath, currentBranch, status, onRefresh, loading }: Props) {
-  const [showMenu, setShowMenu] = useState(false)
-
+export default function Header({ repoPath, currentBranch, status, onRefresh, loading, onSwitchRepo }: Props) {
   const handleOpenNew = async () => {
-    const path = await window.dialogApi.openDirectory()
-    if (path) {
-      const isRepo = await window.gitApi.isGitRepository(path)
+    const dir = await window.dialogApi.openDirectory()
+    if (dir) {
+      const isRepo = await window.gitApi.isGitRepository(dir)
       if (isRepo) {
-        window.location.reload()
-        localStorage.setItem('lastRepo', path)
+        onSwitchRepo(dir)
       } else {
         alert('所选目录不是有效的Git仓库')
       }
     }
-    setShowMenu(false)
   }
 
   return (

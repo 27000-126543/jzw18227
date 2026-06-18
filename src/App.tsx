@@ -99,6 +99,21 @@ export default function App() {
     }
   }
 
+  const handleSwitchRepo = (newPath: string) => {
+    setRepoPath(newPath)
+    setSelectedCommit(null)
+    setCommits([])
+    setStatus(null)
+    setBranches([])
+    setStashes([])
+    setConflicts([])
+    setShowConflictResolver(false)
+    setViewPanel('none')
+    setActiveTab('history')
+    setCurrentBranch('')
+    setError(null)
+  }
+
   const refresh = () => loadRepositoryData()
 
   if (!repoPath) {
@@ -113,6 +128,7 @@ export default function App() {
         status={status}
         onRefresh={refresh}
         loading={loading}
+        onSwitchRepo={handleSwitchRepo}
       />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         <Sidebar

@@ -25,7 +25,7 @@ export interface GitApi {
   getConflicts: (repoPath: string) => Promise<string[]>
   resolveConflict: (repoPath: string, filePath: string, content: string) => Promise<void>
   pull: (repoPath: string, remote?: string, branch?: string) => Promise<{ success: boolean; conflicts?: string[]; error?: string }>
-  push: (repoPath: string, remote?: string, branch?: string) => Promise<{ success: boolean; error?: string }>
+  push: (repoPath: string, remote?: string, branch?: string, setUpstream?: boolean, forcePush?: boolean) => Promise<{ success: boolean; error?: string }>
   getRemotes: (repoPath: string) => Promise<any[]>
   stashList: (repoPath: string) => Promise<any[]>
   stashPush: (repoPath: string, message?: string, includeUntracked?: boolean) => Promise<string>

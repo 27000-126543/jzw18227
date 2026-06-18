@@ -68,6 +68,9 @@ export default function StashManager({ repoPath, onClose, onRefresh }: Props) {
       setLoading(true)
       await window.gitApi.stashApply(repoPath, idx)
       onRefresh()
+      await load()
+      setSelectedIdx(null)
+      setDiff('')
       alert('✓ 已应用')
     } catch (e: any) {
       alert('应用失败: ' + e.message)
@@ -82,6 +85,7 @@ export default function StashManager({ repoPath, onClose, onRefresh }: Props) {
       onRefresh()
       await load()
       setSelectedIdx(null)
+      setDiff('')
       alert('✓ 已弹出并删除')
     } catch (e: any) {
       alert('Pop 失败: ' + e.message)
@@ -94,10 +98,8 @@ export default function StashManager({ repoPath, onClose, onRefresh }: Props) {
       setLoading(true)
       await window.gitApi.stashDrop(repoPath, idx)
       await load()
-      if (selectedIdx === idx) {
-        setSelectedIdx(null)
-        setDiff('')
-      }
+      setSelectedIdx(null)
+      setDiff('')
     } catch (e: any) {
       alert('删除失败: ' + e.message)
     } finally { setLoading(false) }

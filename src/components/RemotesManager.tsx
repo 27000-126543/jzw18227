@@ -69,18 +69,18 @@ export default function RemotesManager({ repoPath, onClose, onRefresh }: Props) 
       setOpLoading(true)
       const remote = customRemote || selectedRemote
       const branch = pushBranch || undefined
-      addLog(`⬆ 开始推送${forcePush ? '(强制)' : ''}${setUpstream ? '(并设置上游)' : ''}: ${remote}${branch ? ' ' + branch : ''}`)
-      const result = await window.gitApi.push(repoPath, remote, branch)
+      addLog(`⬆ 开始推送${forcePush ? ' (强制 --force)' : ''}${setUpstream ? ' (设置上游 -u)' : ''}: ${remote}${branch ? ' ' + branch : ''}`)
+      const result = await window.gitApi.push(repoPath, remote, branch, setUpstream, forcePush)
       if (result.success) {
         addLog('✓ 推送成功')
         onRefresh()
       } else {
         addLog('✗ 推送失败: ' + (result.error || '未知错误'))
-        alert('推送失败: ' + (result.error || 'Unknown error') + '\n\n如果是上游分支未设置，请勾选"设置上游分支"并指定远端分支名')
+        alert('推送失败:\n\n' + (result.error || '未知错误') + '\n\n常见原因：\n• 远端不存在该分支 → 勾选"设置上游"并填写分支名\n• 本地落后远端 → 先拉取，或勾选"强制推送"\n• 无权限 → 检查远端仓库访问权限')
       }
     } catch (e: any) {
       addLog('✗ 推送异常: ' + e.message)
-      alert('推送异常: ' + e.message)
+      alert('推送异常:\n\n' + e.message)
     } finally { setOpLoading(false) }
   }
 

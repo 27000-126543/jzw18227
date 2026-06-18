@@ -334,17 +334,23 @@ export function registerGitIpcHandlers() {
     }
   })
 
-  ipcMain.handle('git:push', async (_, repoPath: string, remote?: string, branch?: string) => {
+  ipcMain.handle('git:push', async (_, repoPath: string, remote?: string, branch?: string, setUpstream?: boolean, forcePush?: boolean) => {
     try {
       const git = getGit(repoPath)
       const args: string[] = []
-      if (remote && branch) {
+      if (forcePush) {
+        args.push('--force')
+      }
+      if (setUpstream && remote && branch) {
         args.push('-u', remote, branch)
+      } else if (remote && branch) {
+        args.push(remote, branch)
       }
       await git.push(args)
       return { success: true }
-    } catch (error) {
-      return { success: false, error: handleError(error) }
+    } catch (error: any) {
+      const errMsg = error.message || handleError(error)
+      return { success: false, error: errMsg }
     }
   })
 

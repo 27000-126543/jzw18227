@@ -143,82 +143,75 @@ export default function ChangesPanel({ repoPath, status, onRefresh, onConflicts 
     } finally { setLoading(false) }
   }
 
-  const buildPatchFromSelectedLines = (diffText: string, selected: Set<string>, reverse: boolean): string | null => {
+  const buildPatchFromSelectedLines = (diffText: string, selected: Set<string>): string | null => {
     if (selected.size === 0) return null
     const lines = diffText.split('\n')
-    let hunkIdx = -1
-    let lineInHunk = -1
-    const resultLines: string[] = []
+    const headerLines: string[] = []
     let i = 0
-    while (i < lines.length && (lines[i].startsWith('diff --git') || lines[i].startsWith('index') || lines[i].startsWith('---') || lines[i].startsWith('+++'))) {
-      resultLines.push(lines[i])
+    while (i < lines.length && !lines[i].startsWith('@@')) {
+      headerLines.push(lines[i])
       i++
     }
-    let selectedCount = 0
-    let hunkStart = i
+    const outputHunks: string[] = []
+    let hunkIdx = -1
     while (i < lines.length) {
       if (lines[i].startsWith('@@')) {
-        if (selectedCount > 0) {
-          // push previous hunk (already added)
-        }
         hunkIdx++
-        lineInHunk = -1
-        selectedCount = 0
-        // find all selected in this hunk first
-        let j = i + 1
-        let hunkLines: string[] = [lines[i]]
-        let tempLineInHunk = -1
-        let tempSelectedCount = 0
-        while (j < lines.length && !lines[j].startsWith('@@')) {
-          tempLineInHunk++
-          const key = `${hunkIdx}-${tempLineInHunk}`
-          const isAdd = lines[j].startsWith('+') && !lines[j].startsWith('+++')
-          const isDel = lines[j].startsWith('-') && !lines[j].startsWith('---')
-          if ((isAdd || isDel) && selected.has(key)) {
-            tempSelectedCount++
-          }
-          hunkLines.push(lines[j])
-          j++
+        const hunkStart = i
+        const hunkBody: string[] = [lines[i]]
+        i++
+        while (i < lines.length && !lines[i].startsWith('@@')) {
+          hunkBody.push(lines[i])
+          i++
         }
-        if (tempSelectedCount > 0) {
-          // rebuild hunk: include context + selected changes
-          const headerLine = lines[i]
-          resultLines.push(headerLine)
-          for (let k = 1; k < hunkLines.length; k++) {
-            const line = hunkLines[k]
-            const key = `${hunkIdx}-${k - 1}`
-            const isAdd = line.startsWith('+') && !line.startsWith('+++')
-            const isDel = line.startsWith('-') && !line.startsWith('---')
-            if (isAdd || isDel) {
-              if (selected.has(key)) {
-                resultLines.push(line)
-              } else {
-                // treat as context
-                if (line.startsWith('+') && !line.startsWith('+++')) {
-                  resultLines.push(' ' + line.slice(1))
-                } else if (line.startsWith('-') && !line.startsWith('---')) {
-                  resultLines.push(' ' + line.slice(1))
-                } else {
-                  resultLines.push(line)
-                }
-              }
+        let hasSelected = false
+        const processedBody: string[] = []
+        let lineInHunk = -1
+        for (let k = 1; k < hunkBody.length; k++) {
+          const line = hunkBody[k]
+          const isAdd = line.startsWith('+') && !line.startsWith('+++')
+          const isDel = line.startsWith('-') && !line.startsWith('---')
+          if (isAdd || isDel) {
+            lineInHunk++
+          }
+          if (isAdd || isDel) {
+            const key = `${hunkIdx}-${lineInHunk}`
+            if (selected.has(key)) {
+              hasSelected = true
+              processedBody.push(line)
             } else {
-              resultLines.push(line)
+              processedBody.push(' ' + line.slice(1))
             }
+          } else {
+            processedBody.push(line)
           }
         }
-        i = j
+        if (hasSelected) {
+          let oldCount = 0
+          let newCount = 0
+          for (const pl of processedBody) {
+            if (pl.startsWith('-')) oldCount++
+            else if (pl.startsWith('+')) newCount++
+            else { oldCount++; newCount++ }
+          }
+          const origHeader = hunkBody[0]
+          const headerMatch = origHeader.match(/@@ -(\d+)/)
+          const origStartLine = headerMatch ? parseInt(headerMatch[1]) : 1
+          const newHeader = `@@ -${origStartLine},${oldCount} +${origStartLine},${newCount} @@`
+          outputHunks.push(newHeader)
+          outputHunks.push(...processedBody)
+        }
       } else {
         i++
       }
     }
-    if (resultLines.length === 0) return null
-    return resultLines.join('\n') + '\n'
+    if (outputHunks.length === 0) return null
+    return [...headerLines, ...outputHunks].join('\n') + '\n'
   }
 
   const handleStageSelectedLines = async () => {
     if (!selectedFile || selectedLines.size === 0) return
-    const patch = buildPatchFromSelectedLines(diff, selectedLines, false)
+    const patch = buildPatchFromSelectedLines(diff, selectedLines)
     if (!patch) return
     try {
       setLoading(true)
@@ -226,14 +219,13 @@ export default function ChangesPanel({ repoPath, status, onRefresh, onConflicts 
       setSelectedLines(new Set())
       onRefresh()
     } catch (e: any) {
-      alert('逐行暂存失败，已回退到整文件暂存: ' + e.message)
-      await handleStageFile(selectedFile.path)
+      alert('逐行暂存失败: ' + e.message)
     } finally { setLoading(false) }
   }
 
   const handleUnstageSelectedLines = async () => {
     if (!selectedFile || selectedLines.size === 0) return
-    const patch = buildPatchFromSelectedLines(diff, selectedLines, true)
+    const patch = buildPatchFromSelectedLines(diff, selectedLines)
     if (!patch) return
     try {
       setLoading(true)
@@ -241,8 +233,7 @@ export default function ChangesPanel({ repoPath, status, onRefresh, onConflicts 
       setSelectedLines(new Set())
       onRefresh()
     } catch (e: any) {
-      alert('逐行取消暂存失败，已回退到整文件操作: ' + e.message)
-      await handleUnstageFile(selectedFile.path)
+      alert('逐行取消暂存失败: ' + e.message)
     } finally { setLoading(false) }
   }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { BranchInfo } from '../types/git'
 
 type ActionMode = 'create' | 'merge' | 'rebase' | 'delete' | null
@@ -20,6 +20,24 @@ export default function BranchManager({ repoPath, branches, currentBranch, onRef
   const [deleteForce, setDeleteForce] = useState(false)
   const [loading, setLoading] = useState(false)
   const [log, setLog] = useState<string[]>([])
+  const [search, setSearch] = useState('')
+  const [showFavOnly, setShowFavOnly] = useState(false)
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('gitui.favBranches') || '[]')
+    } catch {
+      return []
+    }
+  })
+
+  const toggleFav = (name: string, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    setFavorites(prev => {
+      const next = prev.includes(name) ? prev.filter(x => x !== name) : [...prev, name]
+      localStorage.setItem('gitui.favBranches', JSON.stringify(next))
+      return next
+    })
+  }
 
   useEffect(() => {
     setMode(null)
@@ -29,6 +47,8 @@ export default function BranchManager({ repoPath, branches, currentBranch, onRef
     setFromBranch(currentBranch || '')
     setDeleteForce(false)
     setLog([])
+    setSearch('')
+    setShowFavOnly(false)
   }, [repoPath])
 
   const addLog = (msg: string) => setLog(l => [...l, `[${new Date().toLocaleTimeString()}] ${msg}`])
@@ -170,18 +190,39 @@ export default function BranchManager({ repoPath, branches, currentBranch, onRef
     } finally { setLoading(false) }
   }
 
-  const sortedBranches = [...branches].sort((a, b) => {
-    if (a.current !== b.current) return a.current ? -1 : 1
-    return a.name.localeCompare(b.name)
-  })
+  const sortedBranches = useMemo(() => {
+    let list = [...branches]
+    if (search.trim()) {
+      const s = search.toLowerCase()
+      list = list.filter(b => b.name.toLowerCase().includes(s))
+    }
+    list.sort((a, b) => {
+      if (a.current !== b.current) return a.current ? -1 : 1
+      const af = favorites.includes(a.name)
+      const bf = favorites.includes(b.name)
+      if (af !== bf) return af ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+    if (showFavOnly) {
+      list = list.filter(b => b.current || favorites.includes(b.name))
+    }
+    return list
+  }, [branches, search, favorites, showFavOnly])
 
   return (
     <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minWidth: 0 }}>
-      <div style={{ width: 320, display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: 0, borderRight: '1px solid var(--border-color)' }}>
-        <div className="panel" style={{ border: 'none', borderRadius: 0, flex: 1 }}>
-          <div className="panel-header">
+      <div style={{ width: 340, display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: 0, borderRight: '1px solid var(--border-color)' }}>
+        <div className="panel" style={{ border: 'none', borderRadius: 0, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div className="panel-header" style={{ flexShrink: 0 }}>
             <span>🌿 本地分支 ({branches.length})</span>
             <div style={{ display: 'flex', gap: 4 }}>
+              <button
+                className={`btn btn-icon ${showFavOnly ? 'active' : ''}`}
+                onClick={() => setShowFavOnly(v => !v)}
+                title="仅显示收藏"
+              >
+                ⭐
+              </button>
               <button className={`btn btn-icon ${mode === 'create' ? 'active' : ''}`} onClick={() => setMode(mode === 'create' ? null : 'create')} title="创建分支">
                 ＋
               </button>
@@ -190,14 +231,34 @@ export default function BranchManager({ repoPath, branches, currentBranch, onRef
               </button>
             </div>
           </div>
-          <div className="panel-body">
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border-color)', flexShrink: 0, background: 'var(--bg-secondary)' }}>
+            <input
+              type="text"
+              placeholder="🔍 搜索分支名..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ width: '100%', fontSize: 12, padding: '5px 8px' }}
+            />
+          </div>
+          <div className="panel-body" style={{ flex: 1, overflow: 'auto' }}>
             {sortedBranches.map(b => (
               <div
                 key={b.name}
                 className={`file-tree-item ${selectedBranch === b.name ? 'selected' : ''}`}
-                style={{ padding: '6px 14px', gap: 8 }}
+                style={{ padding: '6px 10px 6px 14px', gap: 8 }}
                 onClick={() => setSelectedBranch(b.name)}
               >
+                <button
+                  className="btn-icon"
+                  onClick={e => toggleFav(b.name, e)}
+                  title={favorites.includes(b.name) ? '取消收藏' : '收藏分支'}
+                  style={{
+                    color: favorites.includes(b.name) ? '#f2c744' : 'var(--text-muted)',
+                    fontSize: 12, padding: 0, width: 18, opacity: favorites.includes(b.name) ? 1 : 0.5
+                  }}
+                >
+                  {favorites.includes(b.name) ? '★' : '☆'}
+                </button>
                 {b.current ? (
                   <span style={{ color: 'var(--accent-blue)', fontSize: 14 }}>●</span>
                 ) : (
@@ -221,6 +282,11 @@ export default function BranchManager({ repoPath, branches, currentBranch, onRef
                 {b.current && <span className="badge badge-current" style={{ flexShrink: 0 }}>当前</span>}
               </div>
             ))}
+            {sortedBranches.length === 0 && (
+              <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 11 }}>
+                {search ? '没有匹配的分支' : (showFavOnly ? '暂无收藏的分支，点击分支名旁的 ☆ 收藏' : '没有分支')}
+              </div>
+            )}
           </div>
         </div>
       </div>

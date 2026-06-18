@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { BranchInfo, StashItem, GitStatus } from '../types/git'
 
 interface Props {
@@ -19,6 +19,10 @@ export default function Sidebar({
   onCheckout, onSelectStash, onViewRemotes, repoPath, onRefresh
 }: Props) {
   const [branchFilter, setBranchFilter] = useState('')
+
+  useEffect(() => {
+    setBranchFilter('')
+  }, [repoPath])
 
   const filteredBranches = branches
     .filter(b => !branchFilter || b.name.toLowerCase().includes(branchFilter.toLowerCase()))

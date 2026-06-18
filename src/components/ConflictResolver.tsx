@@ -105,6 +105,15 @@ export default function ConflictResolver({
   }, [repoPath])
 
   useEffect(() => {
+    setCurrentFile(conflicts[0] || '')
+    setParsed(null)
+    setResolutions(new Map())
+    setCustomContents(new Map())
+    setEditedFiles(new Set())
+    setShowAllResolved(false)
+  }, [repoPath, conflicts])
+
+  useEffect(() => {
     if (currentFile) loadFile(currentFile)
   }, [currentFile, loadFile])
 

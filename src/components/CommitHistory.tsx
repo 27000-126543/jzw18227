@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Commit, CommitFile } from '../types/git'
+import { Commit, CommitFile, BranchInfo } from '../types/git'
 import DiffViewer from './DiffViewer'
 
 interface Props {
@@ -7,7 +7,10 @@ interface Props {
   selectedCommit: Commit | null
   onSelectCommit: (commit: Commit | null) => void
   repoPath: string
+  branches: BranchInfo[]
 }
+
+type CompareMode = 'none' | 'parent' | 'branch' | 'tag' | 'custom'
 
 const COLORS = ['#0078d4', '#107c10', '#d83b01', '#5c2d91', '#e3008c', '#00b7c3', '#8764b8', '#f2c744']
 
@@ -40,12 +43,35 @@ function buildTreeData(commits: Commit[]) {
   return { rows, maxCols }
 }
 
-export default function CommitHistory({ commits, selectedCommit, onSelectCommit, repoPath }: Props) {
+export default function CommitHistory({ commits, selectedCommit, onSelectCommit, repoPath, branches }: Props) {
   const [files, setFiles] = useState<CommitFile[]>([])
   const [diff, setDiff] = useState('')
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [showAll, setShowAll] = useState(false)
+  const [tags, setTags] = useState<string[]>([])
+  const [compareMode, setCompareMode] = useState<CompareMode>('none')
+  const [compareRef, setCompareRef] = useState('')
+  const [compareDiff, setCompareDiff] = useState('')
+  const [compareLoading, setCompareLoading] = useState(false)
+
+  useEffect(() => {
+    setFiles([])
+    setDiff('')
+    setSelectedFile(null)
+    setSearch('')
+    setShowAll(false)
+    setTags([])
+    setCompareMode('none')
+    setCompareRef('')
+    setCompareDiff('')
+  }, [repoPath])
+
+  useEffect(() => {
+    if (repoPath) {
+      window.gitApi.getTags(repoPath).then(setTags).catch(() => {})
+    }
+  }, [repoPath])
 
   const treeData = useMemo(() => buildTreeData(commits), [commits])
 
@@ -63,20 +89,15 @@ export default function CommitHistory({ commits, selectedCommit, onSelectCommit,
   useEffect(() => {
     if (selectedCommit) {
       loadCommitData(selectedCommit.hash)
+      setCompareMode('none')
+      setCompareRef('')
+      setCompareDiff('')
     } else {
       setFiles([])
       setDiff('')
       setSelectedFile(null)
     }
   }, [selectedCommit])
-
-  useEffect(() => {
-    setFiles([])
-    setDiff('')
-    setSelectedFile(null)
-    setSearch('')
-    setShowAll(false)
-  }, [repoPath])
 
   const loadCommitData = async (hash: string) => {
     try {
@@ -91,6 +112,39 @@ export default function CommitHistory({ commits, selectedCommit, onSelectCommit,
       console.error(e)
     }
   }
+
+  const loadCompareDiff = async (mode: CompareMode, ref: string) => {
+    if (!selectedCommit) return
+    setCompareLoading(true)
+    try {
+      let fromRef = ''
+      if (mode === 'parent') {
+        fromRef = selectedCommit.parents[0] || selectedCommit.hash + '^'
+      } else {
+        fromRef = ref
+      }
+      const d = await window.gitApi.getRangeDiff(repoPath, fromRef, selectedCommit.hash)
+      setCompareDiff(d)
+    } catch (e: any) {
+      setCompareDiff('比较失败: ' + e.message)
+    } finally {
+      setCompareLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (compareMode === 'none' || !selectedCommit) {
+      setCompareDiff('')
+      return
+    }
+    if (compareMode === 'parent') {
+      loadCompareDiff('parent', '')
+    } else if (compareRef) {
+      loadCompareDiff(compareMode, compareRef)
+    } else {
+      setCompareDiff('')
+    }
+  }, [compareMode, compareRef, selectedCommit])
 
   const loadFileDiff = async (filePath: string, hash: string) => {
     try {
@@ -226,17 +280,94 @@ export default function CommitHistory({ commits, selectedCommit, onSelectCommit,
                   {selectedCommit.body.trim()}
                 </div>
               )}
-              <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-secondary)', flexWrap: 'wrap', marginBottom: 10 }}>
                 <span title={selectedCommit.hash}>🔑 {selectedCommit.shortHash}</span>
                 <span>👤 {selectedCommit.author_name}</span>
                 <span>📧 {selectedCommit.author_email}</span>
                 <span>🕐 {new Date(selectedCommit.date).toLocaleString('zh-CN')}</span>
               </div>
+              <div style={{
+                padding: 10, background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 4
+              }}>
+                <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                  🔀 与其他版本比较差异
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <select
+                    className="form-input"
+                    style={{ flex: 1, fontSize: 11, padding: '4px 8px', minWidth: 130 }}
+                    value={compareMode}
+                    onChange={e => {
+                      setCompareMode(e.target.value as CompareMode)
+                      setCompareRef('')
+                    }}
+                  >
+                    <option value="none">— 不比较（仅显示本提交） —</option>
+                    <option value="parent">👨 与父提交比较</option>
+                    <option value="branch">🌿 与某分支比较</option>
+                    <option value="tag">🏷 与某标签比较</option>
+                    <option value="custom">✏️ 自定义 ref</option>
+                  </select>
+                  {compareMode === 'branch' && (
+                    <select
+                      className="form-input"
+                      style={{ flex: 1, fontSize: 11, padding: '4px 8px', minWidth: 130 }}
+                      value={compareRef}
+                      onChange={e => setCompareRef(e.target.value)}
+                    >
+                      <option value="">选择分支...</option>
+                      {branches.map(b => (
+                        <option key={b.name} value={b.name}>{b.current ? '★ ' : ''}{b.name}</option>
+                      ))}
+                    </select>
+                  )}
+                  {compareMode === 'tag' && (
+                    <select
+                      className="form-input"
+                      style={{ flex: 1, fontSize: 11, padding: '4px 8px', minWidth: 130 }}
+                      value={compareRef}
+                      onChange={e => setCompareRef(e.target.value)}
+                    >
+                      <option value="">选择标签...</option>
+                      {tags.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  )}
+                  {compareMode === 'custom' && (
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="提交哈希 / ref..."
+                      style={{ flex: 1, fontSize: 11, padding: '4px 8px', minWidth: 130 }}
+                      value={compareRef}
+                      onChange={e => setCompareRef(e.target.value)}
+                    />
+                  )}
+                  {compareMode !== 'none' && (
+                    <button
+                      className="btn btn-secondary btn-icon"
+                      onClick={() => { setCompareMode('none'); setCompareRef('') }}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                {compareMode !== 'none' && (
+                  <div style={{
+                    marginTop: 6, fontSize: 10.5, color: 'var(--accent-blue)', fontFamily: 'var(--font-mono)'
+                  }}>
+                    $ git diff {compareMode === 'parent' ? selectedCommit.parents[0] || (selectedCommit.hash + '^') : compareRef}..{selectedCommit.shortHash}
+                    {compareLoading && <span style={{ marginLeft: 10 }}>⏳ 加载中...</span>}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="panel" style={{ border: 'none', borderRadius: 0, flex: 1, minHeight: 0 }}>
               <div className="panel-header">
-                <span>📂 改动文件 ({files.length})</span>
+                <span>
+                  {compareMode !== 'none' ? '� 比较差异' : '�📂 改动文件'}
+                  {compareMode !== 'none' && <span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: 6 }}>（{files.length} 个文件）</span>}
+                </span>
                 {selectedFile && (
                   <button className="btn btn-secondary btn-icon" onClick={() => {
                     setSelectedFile(null)
@@ -246,34 +377,36 @@ export default function CommitHistory({ commits, selectedCommit, onSelectCommit,
                   </button>
                 )}
               </div>
-              <div className="panel-body" style={{ maxHeight: 180, flex: '0 0 auto' }}>
-                {files.map((f, i) => (
-                  <div
-                    key={i}
-                    className={`file-tree-item ${selectedFile === f.path ? 'selected' : ''}`}
-                    style={{ padding: '4px 14px', gap: 8 }}
-                    onClick={() => loadFileDiff(f.path, selectedCommit.hash)}
-                  >
-                    <span className={`status-dot status-${f.status === 'modified' ? 'modified' : f.status === 'added' ? 'added' : f.status === 'deleted' ? 'deleted' : f.status === 'renamed' ? 'renamed' : 'conflict'}`} />
-                    <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                      {f.oldPath ? `${f.oldPath} → ` : ''}{f.path}
-                    </span>
-                    <span style={{
-                      fontSize: 10, textTransform: 'uppercase', fontWeight: 600,
-                      color: f.status === 'added' ? 'var(--accent-green)' :
-                        f.status === 'deleted' ? 'var(--accent-red)' :
-                          f.status === 'renamed' ? 'var(--accent-orange)' : 'var(--accent-blue)'
-                    }}>
-                      {f.status === 'modified' ? 'M' : f.status === 'added' ? 'A' : f.status === 'deleted' ? 'D' : f.status === 'renamed' ? 'R' : f.status.toUpperCase()}
-                    </span>
-                  </div>
-                ))}
-                {files.length === 0 && (
-                  <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: 11 }}>
-                    没有改动文件
-                  </div>
-                )}
-              </div>
+              {compareMode === 'none' && (
+                <div className="panel-body" style={{ maxHeight: 180, flex: '0 0 auto' }}>
+                  {files.map((f, i) => (
+                    <div
+                      key={i}
+                      className={`file-tree-item ${selectedFile === f.path ? 'selected' : ''}`}
+                      style={{ padding: '4px 14px', gap: 8 }}
+                      onClick={() => loadFileDiff(f.path, selectedCommit.hash)}
+                    >
+                      <span className={`status-dot status-${f.status === 'modified' ? 'modified' : f.status === 'added' ? 'added' : f.status === 'deleted' ? 'deleted' : f.status === 'renamed' ? 'renamed' : 'conflict'}`} />
+                      <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                        {f.oldPath ? `${f.oldPath} → ` : ''}{f.path}
+                      </span>
+                      <span style={{
+                        fontSize: 10, textTransform: 'uppercase', fontWeight: 600,
+                        color: f.status === 'added' ? 'var(--accent-green)' :
+                          f.status === 'deleted' ? 'var(--accent-red)' :
+                            f.status === 'renamed' ? 'var(--accent-orange)' : 'var(--accent-blue)'
+                      }}>
+                        {f.status === 'modified' ? 'M' : f.status === 'added' ? 'A' : f.status === 'deleted' ? 'D' : f.status === 'renamed' ? 'R' : f.status.toUpperCase()}
+                      </span>
+                    </div>
+                  ))}
+                  {files.length === 0 && (
+                    <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: 11 }}>
+                      没有改动文件
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div style={{
@@ -281,10 +414,18 @@ export default function CommitHistory({ commits, selectedCommit, onSelectCommit,
               borderTop: '1px solid var(--border-color)', minHeight: 0
             }}>
               <div className="panel-header">
-                <span>🔍 Diff {selectedFile ? `- ${selectedFile}` : ''}</span>
+                <span>
+                  🔍 {compareMode !== 'none' ? '比较 Diff' : 'Diff'}
+                  {selectedFile ? ` - ${selectedFile}` : ''}
+                  {compareMode !== 'none' && compareRef && (
+                    <span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: 6, fontSize: 10 }}>
+                      vs {compareMode === 'parent' ? '父提交' : compareRef}
+                    </span>
+                  )}
+                </span>
               </div>
               <div style={{ flex: 1, overflow: 'auto' }}>
-                <DiffViewer diff={diff} />
+                <DiffViewer diff={compareMode !== 'none' ? compareDiff : diff} />
               </div>
             </div>
           </>

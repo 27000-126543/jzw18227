@@ -130,7 +130,7 @@ export default function App() {
         loading={loading}
         onSwitchRepo={handleSwitchRepo}
       />
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }} key={repoPath}>
         <Sidebar
           branches={branches}
           currentBranch={currentBranch}
@@ -170,6 +170,7 @@ export default function App() {
                 selectedCommit={selectedCommit}
                 onSelectCommit={setSelectedCommit}
                 repoPath={repoPath}
+                branches={branches}
               />
             )}
             {activeTab === 'changes' && repoPath && (
@@ -197,6 +198,7 @@ export default function App() {
       </div>
       {showConflictResolver && repoPath && (
         <ConflictResolver
+          key={'cr-' + repoPath}
           repoPath={repoPath}
           conflicts={conflicts}
           onClose={() => {
@@ -212,6 +214,7 @@ export default function App() {
       )}
       {viewPanel === 'stash' && repoPath && (
         <StashManager
+          key={'sm-' + repoPath}
           repoPath={repoPath}
           onClose={() => setViewPanel('none')}
           onRefresh={refresh}
@@ -219,6 +222,7 @@ export default function App() {
       )}
       {viewPanel === 'remotes' && repoPath && (
         <RemotesManager
+          key={'rm-' + repoPath}
           repoPath={repoPath}
           onClose={() => setViewPanel('none')}
           onRefresh={refresh}

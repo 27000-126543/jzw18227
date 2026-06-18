@@ -409,4 +409,75 @@ export function registerGitIpcHandlers() {
     const fullPath = path.join(repoPath, filePath)
     fs.writeFileSync(fullPath, content, 'utf-8')
   })
+
+  ipcMain.handle('git:getTags', async (_, repoPath: string) => {
+    try {
+      const git = getGit(repoPath)
+      const tags = await git.tags()
+      return tags.all || []
+    } catch {
+      return []
+    }
+  })
+
+  ipcMain.handle('git:getRangeDiff', async (_, repoPath: string, fromRef: string, toRef: string) => {
+    try {
+      const git = getGit(repoPath)
+      const d = await git.raw(['diff', `${fromRef}..${toRef}`])
+      return d as string
+    } catch (error: any) {
+      return ''
+    }
+  })
+
+  ipcMain.handle('git:fetch', async (_, repoPath: string, remote?: string, prune?: boolean) => {
+    try {
+      const git = getGit(repoPath)
+      const args: string[] = []
+      if (prune) args.push('--prune')
+      if (remote) args.push(remote)
+      const r: any = await git.fetch(args)
+      const updated = (r && r.branches) ? Object.keys(r.branches || {}).length : 0
+      const tags = (r && r.tags) ? Object.keys(r.tags || {}).length : 0
+      return {
+        success: true,
+        updated,
+        tagsUpdated: tags,
+        pruned: prune,
+        message: updated > 0 || tags > 0 ? `更新了 ${updated} 个分支、${tags} 个标签` : (prune ? '已清理远端已删除的引用' : '已是最新，没有新内容')
+      }
+    } catch (error: any) {
+      return { success: false, error: handleError(error) }
+    }
+  })
+
+  ipcMain.handle('git:fetchAll', async (_, repoPath: string, prune?: boolean) => {
+    try {
+      const git = getGit(repoPath)
+      const args = ['--all']
+      if (prune) args.push('--prune')
+      const r: any = await git.fetch(args)
+      const updated = (r && r.branches) ? Object.keys(r.branches || {}).length : 0
+      const tags = (r && r.tags) ? Object.keys(r.tags || {}).length : 0
+      return {
+        success: true,
+        updated,
+        tagsUpdated: tags,
+        pruned: prune,
+        message: updated > 0 || tags > 0 ? `从所有远端更新了 ${updated} 个分支、${tags} 个标签` : (prune ? '已清理所有远端已删除的引用' : '已是最新，没有新内容')
+      }
+    } catch (error: any) {
+      return { success: false, error: handleError(error) }
+    }
+  })
+
+  ipcMain.handle('git:remotePrune', async (_, repoPath: string, remote: string) => {
+    try {
+      const git = getGit(repoPath)
+      await git.raw(['remote', 'prune', remote])
+      return { success: true, message: `已清理远端 ${remote} 上已删除的引用` }
+    } catch (error: any) {
+      return { success: false, error: handleError(error) }
+    }
+  })
 }

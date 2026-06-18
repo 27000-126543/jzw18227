@@ -25,8 +25,13 @@ interface GitApi {
   getConflicts: (repoPath: string) => Promise<string[]>
   resolveConflict: (repoPath: string, filePath: string, content: string) => Promise<void>
   pull: (repoPath: string, remote?: string, branch?: string) => Promise<{ success: boolean; conflicts?: string[]; error?: string }>
-  push: (repoPath: string, remote?: string, branch?: string, setUpstream?: boolean, forcePush?: boolean) => Promise<{ success: boolean; error?: string }>
+  push: (repoPath: string, remote?: string, branch?: string, setUpstream?: boolean, forcePush?: boolean) => Promise<{ success: boolean; error?: string; args?: string[] }>
   getRemotes: (repoPath: string) => Promise<any[]>
+  getTags: (repoPath: string) => Promise<string[]>
+  getRangeDiff: (repoPath: string, fromRef: string, toRef: string) => Promise<string>
+  fetch: (repoPath: string, remote?: string, prune?: boolean) => Promise<{ success: boolean; error?: string; updated?: number; tagsUpdated?: number; pruned?: boolean; message?: string }>
+  fetchAll: (repoPath: string, prune?: boolean) => Promise<{ success: boolean; error?: string; updated?: number; tagsUpdated?: number; pruned?: boolean; message?: string }>
+  remotePrune: (repoPath: string, remote: string) => Promise<{ success: boolean; error?: string; message?: string }>
   stashList: (repoPath: string) => Promise<any[]>
   stashPush: (repoPath: string, message?: string, includeUntracked?: boolean) => Promise<string>
   stashApply: (repoPath: string, stashIndex: number) => Promise<void>

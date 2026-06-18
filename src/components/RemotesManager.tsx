@@ -116,6 +116,51 @@ export default function RemotesManager({ repoPath, onClose, onRefresh }: Props) 
     } finally { setOpLoading(false) }
   }
 
+  const handleFetch = async (all = false, prune = false) => {
+    try {
+      setOpLoading(true)
+      const remote = customRemote || selectedRemote
+      const cmd = all
+        ? `git fetch --all${prune ? ' --prune' : ''}`
+        : `git fetch ${remote}${prune ? ' --prune' : ''}`
+      addLog(`🔄 开始执行: $ ${cmd}`)
+      const result = all
+        ? await window.gitApi.fetchAll(repoPath, prune)
+        : await window.gitApi.fetch(repoPath, remote, prune)
+      if (result.success) {
+        addLog(`✓ ${result.message || '完成'}`)
+        onRefresh()
+        load()
+      } else {
+        addLog(`✗ 失败: ${result.error || '未知错误'}`)
+        alert('失败: ' + (result.error || '未知错误'))
+      }
+    } catch (e: any) {
+      addLog('✗ 异常: ' + e.message)
+      alert('异常: ' + e.message)
+    } finally { setOpLoading(false) }
+  }
+
+  const handlePrune = async () => {
+    try {
+      setOpLoading(true)
+      const remote = customRemote || selectedRemote
+      addLog(`🧹 清理远端已删除引用: $ git remote prune ${remote}`)
+      const result = await window.gitApi.remotePrune(repoPath, remote)
+      if (result.success) {
+        addLog(`✓ ${result.message || '完成'}`)
+        onRefresh()
+        load()
+      } else {
+        addLog(`✗ 失败: ${result.error || '未知错误'}`)
+        alert('失败: ' + (result.error || '未知错误'))
+      }
+    } catch (e: any) {
+      addLog('✗ 异常: ' + e.message)
+      alert('异常: ' + e.message)
+    } finally { setOpLoading(false) }
+  }
+
   const buildPushArgs = (): string[] => {
     const args: string[] = []
     if (forcePush) args.push('--force')
@@ -317,6 +362,44 @@ export default function RemotesManager({ repoPath, onClose, onRefresh }: Props) 
                       ⚠ 强制推送将覆盖远端历史!
                     </span>
                   )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="panel" style={{ marginTop: 16 }}>
+            <div className="panel-header" style={{ borderTop: 'none', borderLeft: 'none', borderRight: 'none' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>🔧 维护操作 (Fetch / Prune)</span>
+            </div>
+            <div className="panel-body" style={{ padding: 14 }}>
+              <div style={{
+                fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 12
+              }}>
+                Fetch 只从远端下载最新引用但不合并，保持本地分支不变；Prune 清理本地已被远端删除的追踪分支引用。
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                <button className="btn btn-secondary" onClick={() => handleFetch(false, false)} disabled={opLoading}>
+                  🔄 Fetch 单远端
+                </button>
+                <button className="btn btn-secondary" onClick={() => handleFetch(false, true)} disabled={opLoading}>
+                  🔄 Fetch + Prune
+                </button>
+                <button className="btn btn-secondary" onClick={() => handleFetch(true, false)} disabled={opLoading}>
+                  🔄 Fetch 全部 (--all)
+                </button>
+                <button className="btn btn-secondary" onClick={() => handleFetch(true, true)} disabled={opLoading}>
+                  🔄 Fetch 全部 + Prune
+                </button>
+                <button className="btn btn-warning" onClick={handlePrune} disabled={opLoading} style={{ gridColumn: 'span 2' }}>
+                  🧹 清理远程已删除引用 (git remote prune)
+                </button>
+                <div style={{
+                  gridColumn: 'span 2', padding: '8px 10px', background: '#0d0d0d',
+                  border: '1px solid var(--border-color)', borderRadius: 4, fontSize: 10.5,
+                  color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', lineHeight: 1.8
+                }}>
+                  当前远端：<span style={{ color: 'var(--text-primary)' }}>{customRemote || selectedRemote}</span><br />
+                  已配置远端数：<span style={{ color: 'var(--text-primary)' }}>{remotes.length}</span>
                 </div>
               </div>
             </div>

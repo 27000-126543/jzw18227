@@ -139,6 +139,16 @@ textarea {
   color: white;
 }
 
+.btn-warning {
+  background: var(--accent-orange);
+  color: white;
+  border: 1px solid var(--accent-orange);
+}
+
+.btn-warning:hover:not(:disabled) {
+  background: #b74a02;
+}
+
 .btn-secondary {
   background: var(--bg-tertiary);
   color: var(--text-primary);

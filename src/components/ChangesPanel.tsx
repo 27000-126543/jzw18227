@@ -70,6 +70,13 @@ export default function ChangesPanel({ repoPath, status, onRefresh, onConflicts 
     }
   }, [status])
 
+  useEffect(() => {
+    setSelectedFile(null)
+    setDiff('')
+    setSelectedLines(new Set())
+    setCommitMessage('')
+  }, [repoPath])
+
   const loadDiff = useCallback(async (path: string, staged: boolean) => {
     try {
       if (!staged && parsed.untracked.some(f => f.path === path)) {
@@ -157,7 +164,6 @@ export default function ChangesPanel({ repoPath, status, onRefresh, onConflicts 
     while (i < lines.length) {
       if (lines[i].startsWith('@@')) {
         hunkIdx++
-        const hunkStart = i
         const hunkBody: string[] = [lines[i]]
         i++
         while (i < lines.length && !lines[i].startsWith('@@')) {
@@ -166,16 +172,13 @@ export default function ChangesPanel({ repoPath, status, onRefresh, onConflicts 
         }
         let hasSelected = false
         const processedBody: string[] = []
-        let lineInHunk = -1
         for (let k = 1; k < hunkBody.length; k++) {
           const line = hunkBody[k]
+          const lIdx = k - 1
+          const key = `${hunkIdx}-${lIdx}`
           const isAdd = line.startsWith('+') && !line.startsWith('+++')
           const isDel = line.startsWith('-') && !line.startsWith('---')
           if (isAdd || isDel) {
-            lineInHunk++
-          }
-          if (isAdd || isDel) {
-            const key = `${hunkIdx}-${lineInHunk}`
             if (selected.has(key)) {
               hasSelected = true
               processedBody.push(line)
@@ -195,9 +198,11 @@ export default function ChangesPanel({ repoPath, status, onRefresh, onConflicts 
             else { oldCount++; newCount++ }
           }
           const origHeader = hunkBody[0]
-          const headerMatch = origHeader.match(/@@ -(\d+)/)
-          const origStartLine = headerMatch ? parseInt(headerMatch[1]) : 1
-          const newHeader = `@@ -${origStartLine},${oldCount} +${origStartLine},${newCount} @@`
+          const matchOld = origHeader.match(/@@ -(\d+)/)
+          const matchNew = origHeader.match(/\+(\d+)/)
+          const oldStart = matchOld ? parseInt(matchOld[1]) : 1
+          const newStart = matchNew ? parseInt(matchNew[1]) : 1
+          const newHeader = `@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`
           outputHunks.push(newHeader)
           outputHunks.push(...processedBody)
         }

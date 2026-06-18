@@ -335,9 +335,9 @@ export function registerGitIpcHandlers() {
   })
 
   ipcMain.handle('git:push', async (_, repoPath: string, remote?: string, branch?: string, setUpstream?: boolean, forcePush?: boolean) => {
+    const args: string[] = []
     try {
       const git = getGit(repoPath)
-      const args: string[] = []
       if (forcePush) {
         args.push('--force')
       }
@@ -347,10 +347,10 @@ export function registerGitIpcHandlers() {
         args.push(remote, branch)
       }
       await git.push(args)
-      return { success: true }
+      return { success: true, args }
     } catch (error: any) {
       const errMsg = error.message || handleError(error)
-      return { success: false, error: errMsg }
+      return { success: false, error: errMsg, args }
     }
   })
 

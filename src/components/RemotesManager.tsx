@@ -36,9 +36,18 @@ export default function RemotesManager({ repoPath, onClose, onRefresh }: Props) 
     } finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [repoPath])
 
   const addLog = (msg: string) => setLog(l => [...l, `[${new Date().toLocaleTimeString()}] ${msg}`])
+
+  useEffect(() => {
+    setCustomRemote('')
+    setCustomBranch('')
+    setPushBranch('')
+    setForcePush(false)
+    setSetUpstream(true)
+    setLog([])
+  }, [repoPath])
 
   const handlePull = async () => {
     try {
@@ -69,20 +78,69 @@ export default function RemotesManager({ repoPath, onClose, onRefresh }: Props) 
       setOpLoading(true)
       const remote = customRemote || selectedRemote
       const branch = pushBranch || undefined
-      addLog(`⬆ 开始推送${forcePush ? ' (强制 --force)' : ''}${setUpstream ? ' (设置上游 -u)' : ''}: ${remote}${branch ? ' ' + branch : ''}`)
-      const result = await window.gitApi.push(repoPath, remote, branch, setUpstream, forcePush)
+      addLog(`⬆ 开始推送: ${pushCmdPreview}`)
+      const result: any = await window.gitApi.push(repoPath, remote, branch, setUpstream, forcePush)
       if (result.success) {
-        addLog('✓ 推送成功')
+        addLog(`✓ 推送成功 (实际执行: git push ${(result.args || []).join(' ')})`)
         onRefresh()
       } else {
-        addLog('✗ 推送失败: ' + (result.error || '未知错误'))
-        alert('推送失败:\n\n' + (result.error || '未知错误') + '\n\n常见原因：\n• 远端不存在该分支 → 勾选"设置上游"并填写分支名\n• 本地落后远端 → 先拉取，或勾选"强制推送"\n• 无权限 → 检查远端仓库访问权限')
+        const actualArgs = (result.args || []).join(' ') || '<empty>'
+        addLog(`✗ 推送失败: git push ${actualArgs} → ${result.error || '未知错误'}`)
+        const hint: string[] = []
+        const err = (result.error || '').toLowerCase()
+        hint.push(`实际执行命令: git push ${actualArgs}`)
+        hint.push('')
+        if (err.includes('no upstream branch') || err.includes('no upstream') || err.includes('upstream branch')) {
+          hint.push('原因: 当前分支没有设置上游分支')
+          hint.push('解决: 勾选"设置上游 (-u)" 并填写远端分支名')
+        } else if (err.includes('rejected') || err.includes('non-fast-forward')) {
+          hint.push('原因: 本地版本落后于远端（non-fast-forward）')
+          hint.push('解决: 先执行拉取合并，或勾选"强制推送"（强制会覆盖远端历史，慎用！）')
+        } else if (err.includes('auth') || err.includes('permission') || err.includes('denied')) {
+          hint.push('原因: 权限被拒绝或认证失败')
+          hint.push('解决: 检查远端仓库 URL 是否正确、SSH 密钥或凭证是否已配置')
+        } else if (err.includes('remote not found') || err.includes('does not exist')) {
+          hint.push('原因: 远端仓库不存在')
+          hint.push('解决: 在仓库配置中用 git remote add 添加正确的远端地址')
+        } else if (err.includes('force') || err.includes('protected')) {
+          hint.push('原因: 该分支是受保护分支，禁止强制推送')
+          hint.push('解决: 不勾选"强制推送"，或在 Git 平台上修改分支保护规则')
+        } else {
+          hint.push('原因说明: ' + (result.error || '未知'))
+        }
+        alert('推送失败\n\n' + hint.join('\n'))
       }
     } catch (e: any) {
       addLog('✗ 推送异常: ' + e.message)
       alert('推送异常:\n\n' + e.message)
     } finally { setOpLoading(false) }
   }
+
+  const buildPushArgs = (): string[] => {
+    const args: string[] = []
+    if (forcePush) args.push('--force')
+    const remote = customRemote || selectedRemote
+    if (setUpstream && remote && pushBranch) {
+      args.push('-u', remote, pushBranch)
+    } else if (remote && pushBranch) {
+      args.push(remote, pushBranch)
+    }
+    return args
+  }
+
+  const pushCmdPreview = (() => {
+    const parts = ['git push', ...buildPushArgs()]
+    return parts.join(' ')
+  })()
+
+  const pullCmdPreview = (() => {
+    const remote = customRemote || selectedRemote
+    const parts = ['git pull']
+    if (customBranch) {
+      parts.push(remote, customBranch)
+    }
+    return parts.join(' ')
+  })()
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -179,6 +237,13 @@ export default function RemotesManager({ repoPath, onClose, onRefresh }: Props) 
                 >
                   ⬇️ 拉取
                 </button>
+                <div style={{
+                  marginTop: 10, padding: '6px 10px', fontFamily: 'var(--font-mono)', fontSize: 11,
+                  background: '#0d0d0d', color: 'var(--accent-blue)', borderRadius: 4, border: '1px solid var(--border-color)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                }} title={pullCmdPreview}>
+                  $ {pullCmdPreview}
+                </div>
               </div>
             </div>
 
@@ -234,6 +299,25 @@ export default function RemotesManager({ repoPath, onClose, onRefresh }: Props) 
                 >
                   ⬆️ 推送
                 </button>
+                <div style={{
+                  marginTop: 10, padding: '6px 10px', fontFamily: 'var(--font-mono)', fontSize: 11,
+                  background: '#0d0d0d', color: forcePush ? 'var(--accent-red)' : 'var(--accent-green)',
+                  borderRadius: 4, border: '1px solid var(--border-color)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  fontWeight: forcePush ? 700 : 400
+                }} title={pushCmdPreview}>
+                  $ {pushCmdPreview}
+                  {!pushBranch && (
+                    <span style={{ marginLeft: 8, color: 'var(--accent-orange)', fontWeight: 600 }}>
+                      ⚠ 未填分支将推到默认上游
+                    </span>
+                  )}
+                  {forcePush && (
+                    <span style={{ marginLeft: 8, fontWeight: 700 }}>
+                      ⚠ 强制推送将覆盖远端历史!
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </div>

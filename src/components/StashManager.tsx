@@ -28,12 +28,14 @@ export default function StashManager({ repoPath, onClose, onRefresh }: Props) {
       setLoading(true)
       const list = await window.gitApi.stashList(repoPath)
       setStashes(list)
+      setSelectedIdx(null)
+      setDiff('')
     } catch (e) {
       console.error(e)
     } finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [repoPath])
 
   const handleStashPush = async () => {
     try {

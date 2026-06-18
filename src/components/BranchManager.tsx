@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { BranchInfo } from '../types/git'
 
 type ActionMode = 'create' | 'merge' | 'rebase' | 'delete' | null
@@ -20,6 +20,16 @@ export default function BranchManager({ repoPath, branches, currentBranch, onRef
   const [deleteForce, setDeleteForce] = useState(false)
   const [loading, setLoading] = useState(false)
   const [log, setLog] = useState<string[]>([])
+
+  useEffect(() => {
+    setMode(null)
+    setSelectedBranch('')
+    setTargetBranch('')
+    setNewBranchName('')
+    setFromBranch(currentBranch || '')
+    setDeleteForce(false)
+    setLog([])
+  }, [repoPath])
 
   const addLog = (msg: string) => setLog(l => [...l, `[${new Date().toLocaleTimeString()}] ${msg}`])
 

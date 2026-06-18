@@ -70,6 +70,14 @@ export default function CommitHistory({ commits, selectedCommit, onSelectCommit,
     }
   }, [selectedCommit])
 
+  useEffect(() => {
+    setFiles([])
+    setDiff('')
+    setSelectedFile(null)
+    setSearch('')
+    setShowAll(false)
+  }, [repoPath])
+
   const loadCommitData = async (hash: string) => {
     try {
       const [f, d] = await Promise.all([
